@@ -18,9 +18,12 @@ LOGGER = udi_interface.LOGGER
 Custom = udi_interface.Custom
 
 # The Hue v2 eventstream sends no keepalive, so an idle stream is
-# indistinguishable from a silently stalled one. Reconnect on a fixed
-# cadence to bound how long a stall can go unnoticed.
-STREAM_REFRESH_SECONDS = 3600
+# indistinguishable from a silently stalled one. A read timeout bounds how
+# long total silence can go unnoticed: after STREAM_READ_TIMEOUT seconds
+# without a single event the blocked read raises, the streaming thread
+# exits, and the next poll restarts it. Streams that deliver events are
+# never interrupted.
+STREAM_READ_TIMEOUT = 3600
 
 
 class Control(udi_interface.Node):
@@ -48,8 +51,6 @@ class Control(udi_interface.Node):
         self.ignore_second_on = False
         self.stream_thread = {}
         self.stream_last_update = {}
-        self.stream_started = {}
-        self.stream_http = {}
         self.poly.subscribe(polyglot.START, self.start, address)
         self.poly.subscribe(polyglot.CUSTOMPARAMS, self.parameter_handler)
         self.poly.subscribe(polyglot.CUSTOMDATA, self.data_handler)
@@ -383,16 +384,6 @@ class Control(udi_interface.Node):
             self._start_streaming(hub_ip)
         else:
             if self.stream_thread[hub_ip].is_alive():
-                if (int(time.time()) - self.stream_started.get(hub_ip, 0)) > STREAM_REFRESH_SECONDS:
-                    LOGGER.info('Periodic event stream refresh: reconnecting to bound silent stalls')
-                    try:
-                        if hub_ip in self.stream_http:
-                            self.stream_http[hub_ip].clear()
-                    except Exception:
-                        pass
-                    self._start_streaming(hub_ip)
-                    self.updateNodes(hub_ip)
-                    return True
                 if (int(time.time()) - self.stream_last_update[hub_ip]) > 86400:
                     LOGGER.error('No updates from streaming thread for 24 hours, streaming hung up? Restarting the node server...')
                     self.poly.restart()
@@ -400,13 +391,16 @@ class Control(udi_interface.Node):
                 return True
             LOGGER.warning('Event Streaming thread died, attempting to restart.')
             self._start_streaming(hub_ip)
+            # The stream may have been down for a while; re-read all device
+            # state from the bridge so events missed during the gap are
+            # reflected on the ISY.
+            self.updateNodes(hub_ip)
         return True
 
     def _start_streaming(self, hub_ip):
         self.stream_thread[hub_ip] = Thread(target=self._streaming_process, args=[hub_ip], daemon=True)
         self.stream_thread[hub_ip].start()
         self.stream_last_update[hub_ip] = int(time.time())
-        self.stream_started[hub_ip] = int(time.time())
 
     def _streaming_process(self, hub_ip):
         headers = {
@@ -415,36 +409,44 @@ class Control(udi_interface.Node):
         }
         url = f"https://{hub_ip}/eventstream/clip/v2"
         http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs="hue.crt", assert_hostname=False)
-        self.stream_http[hub_ip] = http
         try:
-            response = http.request('GET', url, preload_content=False, headers=headers)
+            response = http.request('GET', url, preload_content=False, headers=headers,
+                                    timeout=urllib3.Timeout(connect=10, read=STREAM_READ_TIMEOUT))
         except Exception as e:
             LOGGER.error(f'REST Streaming Request Failed: {e}')
             http.clear()
             return
         client = sseclient.SSEClient(response)
-        for event in client.events():  # returns a generator
-            self.stream_last_update[hub_ip] = int(time.time())
-            event_data = json.loads(event.data)
-            for event_item in event_data:
-                for event_chunk in event_item['data']:
-                    if event_chunk['type'] in ['light','grouped_light','motion','light_level','temperature','button']:
-                        address = id2addr(event_chunk['id'])
-                        if address in self.poly.getNodes():
-                            self.poly.getNode(address).process_event(event_chunk)
+        try:
+            for event in client.events():  # returns a generator
+                self.stream_last_update[hub_ip] = int(time.time())
+                event_data = json.loads(event.data)
+                for event_item in event_data:
+                    for event_chunk in event_item['data']:
+                        if event_chunk['type'] in ['light','grouped_light','motion','light_level','temperature','button']:
+                            address = id2addr(event_chunk['id'])
+                            if address in self.poly.getNodes():
+                                self.poly.getNode(address).process_event(event_chunk)
+                            else:
+                                LOGGER.debug(f'Received event {event_chunk} for unknown node')
+                        elif event_chunk['type'] == 'zigbee_connectivity':
+                            for node in self.poly.getNodes().values():
+                                if hasattr(node, "zigbee_connectivity_id"):
+                                    if node.zigbee_connectivity_id == event_chunk['id']:
+                                        node.process_connectivity(event_chunk)
+                        elif event_chunk['type'] == 'scene':
+                            for scene in self.scenes[hub_ip]:
+                                if scene['id'] == event_chunk['id']:
+                                    LOGGER.info(f"Scene {scene['metadata']['name']} {scene['id']} is {scene['status']['active']}")
                         else:
-                            LOGGER.debug(f'Received event {event_chunk} for unknown node')
-                    elif event_chunk['type'] == 'zigbee_connectivity':
-                        for node in self.poly.getNodes().values():
-                            if hasattr(node, "zigbee_connectivity_id"):
-                                if node.zigbee_connectivity_id == event_chunk['id']:
-                                    node.process_connectivity(event_chunk)
-                    elif event_chunk['type'] == 'scene':
-                        for scene in self.scenes[hub_ip]:
-                            if scene['id'] == event_chunk['id']:
-                                LOGGER.info(f"Scene {scene['metadata']['name']} {scene['id']} is {scene['status']['active']}")
-                    else:
-                        LOGGER.debug(f"Received unknown event type {event_chunk['type']}: {event_chunk}")
+                            LOGGER.debug(f"Received unknown event type {event_chunk['type']}: {event_chunk}")
+        except Exception as e:
+            # Covers the read timeout (stream went silent) and any transport
+            # or parse error. Exiting here lets the next poll restart the
+            # thread via the dead-thread branch.
+            LOGGER.error(f'Streaming process exited on error: {e}')
+        finally:
+            response.close()
         LOGGER.warning('Streaming Process exited')
 
     drivers = [{ 'driver': 'ST', 'value': 1, 'uom': 2 }]
