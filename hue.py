@@ -41,6 +41,7 @@ class Control(udi_interface.Node):
         self.devices = {}
         self.groups = {}
         self.entertainment_configs = {}
+        self.private_groups = {}
         self.scenes = {}
         self.rooms = {}
         self.zones = {}
@@ -205,6 +206,11 @@ class Control(udi_interface.Node):
         except Exception as ex:
             LOGGER.warning(f'Hub {hub_idx} entertainment_configuration fetch failed: {ex}')
             self.entertainment_configs[hub_idx] = []
+        try:
+            self.private_groups[hub_idx] = self.hub[hub_idx].get_private_groups() or []
+        except Exception as ex:
+            LOGGER.warning(f'Hub {hub_idx} private_group fetch failed: {ex}')
+            self.private_groups[hub_idx] = []
         self.rooms[hub_idx] = self.hub[hub_idx].get_rooms()
         self.zones[hub_idx] = self.hub[hub_idx].get_zones()
         self.scenes[hub_idx] = self.hub[hub_idx].get_scenes()
@@ -350,6 +356,18 @@ class Control(udi_interface.Node):
                         continue
                 if name == 'Unknown group':
                     LOGGER.warning(f"Hub {hub_idx} group {address} owner entertainment_configuration rid={group['owner']['rid']} matched none of {len(self.entertainment_configs.get(hub_idx, []))} configs")
+            elif group['owner']['rtype'] == 'private_group':
+                name = 'Unknown group'
+                for pg in self.private_groups.get(hub_idx, []):
+                    try:
+                        if pg['id'] == group['owner']['rid']:
+                            name = pg['metadata']['name']
+                            LOGGER.info(f"Hub {hub_idx} resolved group {address} as private_group '{name}' ({pg['id']})")
+                            break
+                    except (KeyError, TypeError):
+                        LOGGER.warning(f"Hub {hub_idx} private_group {pg.get('id')} lacks metadata name: {str(pg)[:400]}")
+                if name == 'Unknown group':
+                    LOGGER.warning(f"Hub {hub_idx} group {address} owner private_group rid={group['owner']['rid']} matched none of {len(self.private_groups.get(hub_idx, []))} private groups")
             else:
                 LOGGER.warning(f"Hub {hub_idx} group id={group['id']} addr={address} unhandled owner {group['owner']}")
                 name = 'Unknown group'
