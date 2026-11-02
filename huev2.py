@@ -51,7 +51,8 @@ class HueBridge:
         """ retrieve username if not provided """
         if self.username is None:
             self.bridge_pool = urllib3.HTTPSConnectionPool(self.hub_ip, cert_reqs="CERT_REQUIRED", ca_certs="hue.crt",
-                                                           assert_hostname=False)
+                                                           assert_hostname=False,
+                                                           timeout=urllib3.Timeout(connect=10, read=30))
             auth = self.get_token()
             if auth is not None:
                 self.username = auth["username"]
@@ -62,7 +63,8 @@ class HueBridge:
         """ establish default connection pool """
         self.headers = {"hue-application-key": self.username}
         self.bridge_pool = urllib3.HTTPSConnectionPool(self.hub_ip, cert_reqs="CERT_REQUIRED", ca_certs="hue.crt",
-                                                       assert_hostname=False, headers=self.headers)
+                                                       assert_hostname=False, headers=self.headers,
+                                                       timeout=urllib3.Timeout(connect=10, read=30))
         self.get_bridge()
 
     def get_token(self):
