@@ -45,7 +45,7 @@ class HueBase(udi_interface.Node):
         self.reachable = 0
 
     def query(self):
-        pass
+        self.reportDrivers()
 
     def set_base_ctl(self, command):
         """ Basic On/Off and brightness controls """
@@ -623,7 +623,7 @@ class HueMotion(udi_interface.Node):
         self.updateInfo()
 
     def query(self):
-        pass
+        self.reportDrivers()
 
     def updateInfo(self):
         self.data = None
@@ -717,7 +717,7 @@ class HueLum(udi_interface.Node):
         self.updateInfo()
 
     def query(self):
-        pass
+        self.reportDrivers()
 
     def updateInfo(self):
         self.data = None
@@ -795,7 +795,7 @@ class HueTemp(udi_interface.Node):
         self.updateInfo()
 
     def query(self):
-        pass
+        self.reportDrivers()
 
     @staticmethod
     def celsius_to_fahrenheit(celsius):
@@ -880,7 +880,7 @@ class HueButton(udi_interface.Node):
         self.updateInfo()
 
     def query(self):
-        pass
+        self.reportDrivers()
 
     def updateInfo(self):
         self.data = None
