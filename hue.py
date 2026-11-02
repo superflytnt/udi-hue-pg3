@@ -42,6 +42,7 @@ class Control(udi_interface.Node):
         self.groups = {}
         self.entertainment_configs = {}
         self.private_groups = {}
+        self.v1_groups = {}
         self.scenes = {}
         self.rooms = {}
         self.zones = {}
@@ -211,6 +212,11 @@ class Control(udi_interface.Node):
         except Exception as ex:
             LOGGER.warning(f'Hub {hub_idx} private_group fetch failed: {ex}')
             self.private_groups[hub_idx] = []
+        try:
+            self.v1_groups[hub_idx] = self.hub[hub_idx].get_v1_groups() or {}
+        except Exception as ex:
+            LOGGER.warning(f'Hub {hub_idx} v1 groups fetch failed: {ex}')
+            self.v1_groups[hub_idx] = {}
         self.rooms[hub_idx] = self.hub[hub_idx].get_rooms()
         self.zones[hub_idx] = self.hub[hub_idx].get_zones()
         self.scenes[hub_idx] = self.hub[hub_idx].get_scenes()
@@ -320,7 +326,7 @@ class Control(udi_interface.Node):
 
         for group in self.groups[hub_idx]:
             address = id2addr(group['id'])
-            LOGGER.info(f"Hub {hub_idx} group id={group['id']} addr={address} owner_rtype={group['owner']['rtype']} owner_rid={group['owner']['rid']}")
+            LOGGER.info(f"Hub {hub_idx} group id={group['id']} addr={address} owner_rtype={group['owner']['rtype']} owner_rid={group['owner']['rid']} id_v1={group.get('id_v1')}")
             scene_idx = 0
             if group['owner']['rtype'] == 'room':
                 for room in self.rooms[hub_idx]:
@@ -358,6 +364,21 @@ class Control(udi_interface.Node):
                     LOGGER.warning(f"Hub {hub_idx} group {address} owner entertainment_configuration rid={group['owner']['rid']} matched none of {len(self.entertainment_configs.get(hub_idx, []))} configs")
             elif group['owner']['rtype'] == 'private_group':
                 name = 'Unknown group'
+                id_v1 = group.get('id_v1')
+                if id_v1:
+                    v1_id = str(id_v1).rsplit('/', 1)[-1]
+                    v1g = self.v1_groups.get(hub_idx, {}).get(v1_id)
+                    if v1g:
+                        v1_name = v1g.get('name')
+                        if v1_name:
+                            name = v1_name
+                            LOGGER.info(f"Hub {hub_idx} resolved group {address} via {id_v1} as v1 group '{name}' (type={v1g.get('type')}, class={v1g.get('class')})")
+                        else:
+                            LOGGER.warning(f"Hub {hub_idx} v1 group {v1_id} for {address} has no name: {str(v1g)[:300]}")
+                    else:
+                        LOGGER.warning(f"Hub {hub_idx} {address} id_v1={id_v1} not in {len(self.v1_groups.get(hub_idx, {}))} v1 groups")
+                else:
+                    LOGGER.warning(f"Hub {hub_idx} {address} grouped_light has no id_v1; v1 membership correlation not attempted")
                 for pg in self.private_groups.get(hub_idx, []):
                     try:
                         if pg['id'] == group['owner']['rid']:
