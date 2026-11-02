@@ -40,6 +40,7 @@ class Control(udi_interface.Node):
         self.zigbee_connectivity = {}
         self.devices = {}
         self.groups = {}
+        self.entertainment_configs = {}
         self.scenes = {}
         self.rooms = {}
         self.zones = {}
@@ -199,6 +200,11 @@ class Control(udi_interface.Node):
         self.lights[hub_idx] = self.hub[hub_idx].get_lights()
         self.devices[hub_idx] = self.hub[hub_idx].get_devices()
         self.groups[hub_idx] = self.hub[hub_idx].get_groups()
+        try:
+            self.entertainment_configs[hub_idx] = self.hub[hub_idx].get_entertainment_configs() or []
+        except Exception as ex:
+            LOGGER.warning(f'Hub {hub_idx} entertainment_configuration fetch failed: {ex}')
+            self.entertainment_configs[hub_idx] = []
         self.rooms[hub_idx] = self.hub[hub_idx].get_rooms()
         self.zones[hub_idx] = self.hub[hub_idx].get_zones()
         self.scenes[hub_idx] = self.hub[hub_idx].get_scenes()
@@ -308,6 +314,7 @@ class Control(udi_interface.Node):
 
         for group in self.groups[hub_idx]:
             address = id2addr(group['id'])
+            LOGGER.info(f"Hub {hub_idx} group id={group['id']} addr={address} owner_rtype={group['owner']['rtype']} owner_rid={group['owner']['rid']}")
             scene_idx = 0
             if group['owner']['rtype'] == 'room':
                 for room in self.rooms[hub_idx]:
@@ -331,7 +338,20 @@ class Control(udi_interface.Node):
                         scene_idx += 1
             elif group['owner']['rtype'] == 'bridge_home':
                 name = 'All Lights'
+            elif group['owner']['rtype'] == 'entertainment_configuration':
+                name = 'Unknown group'
+                for cfg in self.entertainment_configs.get(hub_idx, []):
+                    try:
+                        if cfg['id'] == group['owner']['rid']:
+                            name = cfg['metadata']['name']
+                            LOGGER.info(f"Hub {hub_idx} resolved group {address} as entertainment area '{name}' (config {cfg['id']})")
+                            break
+                    except (KeyError, TypeError):
+                        continue
+                if name == 'Unknown group':
+                    LOGGER.warning(f"Hub {hub_idx} group {address} owner entertainment_configuration rid={group['owner']['rid']} matched none of {len(self.entertainment_configs.get(hub_idx, []))} configs")
             else:
+                LOGGER.warning(f"Hub {hub_idx} group id={group['id']} addr={address} unhandled owner {group['owner']}")
                 name = 'Unknown group'
 
             if not self.poly.getNode(address):
