@@ -164,6 +164,13 @@ class HueBridge:
             return False
         return req.json()["data"]
 
+    def get_private_groups(self):
+        req = self.bridge_pool.request("GET", "/clip/v2/resource/private_group")
+        if req.status != 200:
+            LOGGER.warning(f"private_group unavailable: {req.status}")
+            return False
+        return req.json()["data"]
+
     def get_grouped_motion(self):
         req = self.bridge_pool.request("GET", "/clip/v2/resource/grouped_motion")
         if req.status != 200:
