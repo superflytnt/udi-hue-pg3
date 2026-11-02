@@ -43,6 +43,7 @@ class Control(udi_interface.Node):
         self.entertainment_configs = {}
         self.private_groups = {}
         self.v1_groups = {}
+        self.full_dump = {}
         self.scenes = {}
         self.rooms = {}
         self.zones = {}
@@ -217,6 +218,13 @@ class Control(udi_interface.Node):
         except Exception as ex:
             LOGGER.warning(f'Hub {hub_idx} v1 groups fetch failed: {ex}')
             self.v1_groups[hub_idx] = {}
+        v1_list = [(k, v.get('name'), v.get('type')) for k, v in self.v1_groups[hub_idx].items()]
+        LOGGER.info(f"Hub {hub_idx} v1 groups list ({len(v1_list)}): {v1_list}")
+        try:
+            self.full_dump[hub_idx] = self.hub[hub_idx].get_full_resource_dump() or []
+        except Exception as ex:
+            LOGGER.warning(f'Hub {hub_idx} full resource dump fetch failed: {ex}')
+            self.full_dump[hub_idx] = []
         self.rooms[hub_idx] = self.hub[hub_idx].get_rooms()
         self.zones[hub_idx] = self.hub[hub_idx].get_zones()
         self.scenes[hub_idx] = self.hub[hub_idx].get_scenes()
@@ -379,6 +387,24 @@ class Control(udi_interface.Node):
                         LOGGER.warning(f"Hub {hub_idx} {address} id_v1={id_v1} not in {len(self.v1_groups.get(hub_idx, {}))} v1 groups")
                 else:
                     LOGGER.warning(f"Hub {hub_idx} {address} grouped_light has no id_v1; v1 membership correlation not attempted")
+                # cross-reference probe: does anything in the full v2 dump reference this owner rid / group id?
+                try:
+                    rid = group['owner']['rid']
+                    gid = group['id']
+                    refs = []
+                    owner_res = []
+                    for res in self.full_dump.get(hub_idx, []):
+                        s = str(res)
+                        if res.get('id') == rid:
+                            owner_res.append(res)
+                        if res.get('id') in (rid, gid):
+                            continue
+                        if rid in s or gid in s:
+                            refs.append((res.get('type'), res.get('id'), (res.get('metadata') or {}).get('name')))
+                    LOGGER.warning(f"Hub {hub_idx} xref {address} gid={gid} rid={rid}: {len(refs)} referencing resources: {refs[:8]}")
+                    LOGGER.warning(f"Hub {hub_idx} xref {address} owner resource present in dump: {str(owner_res)[:400]}")
+                except Exception as ex:
+                    LOGGER.warning(f'Hub {hub_idx} xref probe failed for {address}: {ex}')
                 for pg in self.private_groups.get(hub_idx, []):
                     try:
                         if pg['id'] == group['owner']['rid']:
