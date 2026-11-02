@@ -157,6 +157,13 @@ class HueBridge:
             return False
         return req.json()["data"]
 
+    def get_entertainment_configs(self):
+        req = self.bridge_pool.request("GET", "/clip/v2/resource/entertainment_configuration")
+        if req.status != 200:
+            LOGGER.warning(f"entertainment_configuration unavailable: {req.status}")
+            return False
+        return req.json()["data"]
+
     def get_grouped_motion(self):
         req = self.bridge_pool.request("GET", "/clip/v2/resource/grouped_motion")
         if req.status != 200:
