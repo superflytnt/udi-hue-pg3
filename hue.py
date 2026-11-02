@@ -17,6 +17,12 @@ from node_types import HueEColorLight, HueGroup, HueMotion, HueLum, HueTemp, Hue
 LOGGER = udi_interface.LOGGER
 Custom = udi_interface.Custom
 
+# The Hue v2 eventstream sends no keepalive, so an idle stream is
+# indistinguishable from a silently stalled one. Reconnect on a fixed
+# cadence to bound how long a stall can go unnoticed.
+STREAM_REFRESH_SECONDS = 3600
+
+
 class Control(udi_interface.Node):
     """ Phillips Hue Node Server """
 
@@ -42,6 +48,8 @@ class Control(udi_interface.Node):
         self.ignore_second_on = False
         self.stream_thread = {}
         self.stream_last_update = {}
+        self.stream_started = {}
+        self.stream_http = {}
         self.poly.subscribe(polyglot.START, self.start, address)
         self.poly.subscribe(polyglot.CUSTOMPARAMS, self.parameter_handler)
         self.poly.subscribe(polyglot.CUSTOMDATA, self.data_handler)
@@ -375,6 +383,16 @@ class Control(udi_interface.Node):
             self._start_streaming(hub_ip)
         else:
             if self.stream_thread[hub_ip].is_alive():
+                if (int(time.time()) - self.stream_started.get(hub_ip, 0)) > STREAM_REFRESH_SECONDS:
+                    LOGGER.info('Periodic event stream refresh: reconnecting to bound silent stalls')
+                    try:
+                        if hub_ip in self.stream_http:
+                            self.stream_http[hub_ip].clear()
+                    except Exception:
+                        pass
+                    self._start_streaming(hub_ip)
+                    self.updateNodes(hub_ip)
+                    return True
                 if (int(time.time()) - self.stream_last_update[hub_ip]) > 86400:
                     LOGGER.error('No updates from streaming thread for 24 hours, streaming hung up? Restarting the node server...')
                     self.poly.restart()
@@ -388,6 +406,7 @@ class Control(udi_interface.Node):
         self.stream_thread[hub_ip] = Thread(target=self._streaming_process, args=[hub_ip], daemon=True)
         self.stream_thread[hub_ip].start()
         self.stream_last_update[hub_ip] = int(time.time())
+        self.stream_started[hub_ip] = int(time.time())
 
     def _streaming_process(self, hub_ip):
         headers = {
@@ -396,6 +415,7 @@ class Control(udi_interface.Node):
         }
         url = f"https://{hub_ip}/eventstream/clip/v2"
         http = urllib3.PoolManager(cert_reqs="CERT_REQUIRED", ca_certs="hue.crt", assert_hostname=False)
+        self.stream_http[hub_ip] = http
         try:
             response = http.request('GET', url, preload_content=False, headers=headers)
         except Exception as e:
