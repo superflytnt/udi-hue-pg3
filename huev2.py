@@ -171,6 +171,13 @@ class HueBridge:
             return False
         return req.json()
 
+    def get_full_resource_dump(self):
+        req = self.bridge_pool.request("GET", "/clip/v2/resource")
+        if req.status != 200:
+            LOGGER.warning(f"full resource dump unavailable: {req.status}")
+            return False
+        return req.json()["data"]
+
     def get_private_groups(self):
         req = self.bridge_pool.request("GET", "/clip/v2/resource/private_group")
         if req.status != 200:
