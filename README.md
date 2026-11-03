@@ -1,5 +1,19 @@
 # UDI Polyglot v2 Philips Hue Poly 
 
+## Why this fork exists
+
+This fork builds on xKing's Philips Hue node server. It addresses gaps found while investigating missing status and lost control in a PG3x/eISY installation:
+
+- An eISY Query did nothing for several node types. Query now re-reports their cached driver values. It does not fetch a new reading from the bridge.
+- A silent or stalled event-stream connection could leave status updates stuck. The stream now has a one-hour read timeout. If its thread exits, the next poll starts it again and refreshes device states to catch changes missed during the gap. Active streams are not periodically interrupted.
+- Bridge requests now have connection and read timeouts, so a request cannot wait indefinitely.
+
+These changes give the plugin a defined recovery path and make status queries useful. Stream timeout/restart behavior was observed, and two reachable lights passed on/off tests through eISY with live bridge-event feedback and restoration of their original state. This is evidence of current control and recovery behavior, not a guarantee of indefinite stability. The original cause of the reported loss of control remains unproven.
+
+### Diagnostic work and limits
+
+This branch also includes diagnostic code for private groups, entertainment configurations, older v1 groups and v2 resource cross-references. That work is not a claim that every group can be named correctly or that new device types are supported. Diagnostic logs may include bridge resource names and identifiers; review them before sharing publicly. An intermittent eISY HTTP 404 is not claimed as fixed by this fork.
+
 [![license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/exking/udi-hue-poly/blob/master/LICENSE)
 [![Build Status](https://travis-ci.org/exking/udi-hue-poly.svg?branch=master)](https://travis-ci.org/exking/udi-hue-poly)
 
