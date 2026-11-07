@@ -53,6 +53,7 @@ class Control(udi_interface.Node):
         self.button = {}
         self.scene_lookup = []
         self.ignore_second_on = False
+        self.heartbeat_url = ''
         self.stream_thread = {}
         self.stream_last_update = {}
         self.poly.subscribe(polyglot.START, self.start, address)
@@ -78,6 +79,10 @@ class Control(udi_interface.Node):
         if self.parameters['ignore_second_on']:
             LOGGER.debug('DON will be ignored if already on')
             self.ignore_second_on = True
+        hb = self.parameters['heartbeat_url']
+        self.heartbeat_url = hb.strip() if hb else ''
+        if self.heartbeat_url:
+            LOGGER.info('Heartbeat URL configured - pinging on every short poll')
         self.connect()
         self.discover()
 
@@ -85,8 +90,26 @@ class Control(udi_interface.Node):
         LOGGER.info('Hue NodeServer is stopping')
 
     def poll(self, polltype):
+        self._ping_heartbeat()
         for idx in self.hub.keys():
             self._check_streaming(idx)
+
+    def _ping_heartbeat(self):
+        """Ping the configured external heartbeat URL, if any.
+
+        Fires on every poll whether bridges are connected, lights are
+        offline, or the event stream is stalled: the signal is plugin
+        liveness, not device state. Failures are logged, never raised -
+        a network hiccup must not break the poll loop.
+        """
+        if not self.heartbeat_url:
+            return
+        import urllib.request
+        try:
+            with urllib.request.urlopen(self.heartbeat_url, timeout=5) as resp:
+                LOGGER.debug(f'Heartbeat ping sent (HTTP {resp.status})')
+        except Exception as ex:
+            LOGGER.warning(f'Heartbeat ping failed: {ex}')
 
     def data_handler(self, data):
         self.cust_data.load(data)
