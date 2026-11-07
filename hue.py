@@ -54,6 +54,7 @@ class Control(udi_interface.Node):
         self.scene_lookup = []
         self.ignore_second_on = False
         self.heartbeat_url = ''
+        self.heartbeat_last = 0.0  # monotonic time of last ping attempt
         self.stream_thread = {}
         self.stream_last_update = {}
         self.poly.subscribe(polyglot.START, self.start, address)
@@ -104,6 +105,13 @@ class Control(udi_interface.Node):
         """
         if not self.heartbeat_url:
             return
+        # Throttle attempts to at most one per 60s: monitoring endpoints
+        # (e.g. UptimeRobot) rate-limit faster pings with HTTP 429, and the
+        # monitor only needs a ping inside its own expected interval.
+        now = time.monotonic()
+        if now - self.heartbeat_last < 60:
+            return
+        self.heartbeat_last = now
         import urllib.request
         try:
             with urllib.request.urlopen(self.heartbeat_url, timeout=5) as resp:
