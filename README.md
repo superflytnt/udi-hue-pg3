@@ -10,6 +10,7 @@ This fork builds on xKing's Philips Hue node server. It addresses gaps found whi
 
 ### Version history
 
+- **1.1.1** (2026-11-07): Heartbeat pings throttled to at most one per 60 seconds, so fast poll intervals cannot trip monitor-endpoint rate limits (HTTP 429).
 - **1.1.0** (2026-11-07): External heartbeat - optional `heartbeat_url` custom parameter. The plugin pings it on every poll, regardless of bridge or device state, so an external cron monitor (e.g. UptimeRobot heartbeat) alerts when the plugin itself freezes. Empty (default) disables the ping.
 - **1.0.9**: Query re-reports cached driver values; event-stream one-hour read timeout with poll-driven restart; bounded bridge request timeouts.
 
