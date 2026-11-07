@@ -8,6 +8,11 @@ This fork builds on xKing's Philips Hue node server. It addresses gaps found whi
 - A silent or stalled event-stream connection could leave status updates stuck. The stream now has a one-hour read timeout. If its thread exits, the next poll starts it again and refreshes device states to catch changes missed during the gap. Active streams are not periodically interrupted.
 - Bridge requests now have connection and read timeouts, so a request cannot wait indefinitely.
 
+### Version history
+
+- **1.1.0** (2026-11-07): External heartbeat - optional `heartbeat_url` custom parameter. The plugin pings it on every poll, regardless of bridge or device state, so an external cron monitor (e.g. UptimeRobot heartbeat) alerts when the plugin itself freezes. Empty (default) disables the ping.
+- **1.0.9**: Query re-reports cached driver values; event-stream one-hour read timeout with poll-driven restart; bounded bridge request timeouts.
+
 These changes give the plugin a defined recovery path and make status queries useful. Stream timeout/restart behavior was observed, and two reachable lights passed on/off tests through eISY with live bridge-event feedback and restoration of their original state. This is evidence of current control and recovery behavior, not a guarantee of indefinite stability. The original cause of the reported loss of control remains unproven.
 
 ### Diagnostic work and limits
