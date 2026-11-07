@@ -1,6 +1,6 @@
 {
     "name": "Hue",
-    "version": "1.0.9",
+    "version": "1.1.0",
     "docs": "https://github.com/exking/udi-hue-pg3/blob/master/README.md",
     "type": "python3",
     "executable": "hue.py",
