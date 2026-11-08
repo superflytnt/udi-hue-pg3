@@ -1,4 +1,4 @@
-# UDI Polyglot v2 Philips Hue Poly 
+# UDI PG3x Philips Hue NodeServer
 
 ## Why this fork exists
 
@@ -20,19 +20,17 @@ These changes give the plugin a defined recovery path and make status queries us
 
 This branch also includes diagnostic code for private groups, entertainment configurations, older v1 groups and v2 resource cross-references. That work is not a claim that every group can be named correctly or that new device types are supported. Diagnostic logs may include bridge resource names and identifiers; review them before sharing publicly. An intermittent eISY HTTP 404 is not claimed as fixed by this fork.
 
-[![license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/exking/udi-hue-poly/blob/master/LICENSE)
-[![Build Status](https://travis-ci.org/exking/udi-hue-poly.svg?branch=master)](https://travis-ci.org/exking/udi-hue-poly)
+[![license](https://img.shields.io/github/license/mashape/apistatus.svg)](LICENSE)
 
-This Poly provides an interface between Hue Bridge and [Polyglot v2](https://github.com/UniversalDevicesInc/polyglot-v2) server.
+This NodeServer provides an interface between the Hue Bridge and Polyglot v3 (PG3x) on Polisy or eISY.
 All Philips branded bulbs are supported (Dimmable, White, Color and Extended Color),
 bulbs could be added to the Insteon scenes as responders and should respond to all basic commands, including dimming.
 
 ### Installation instructions
-Make sure that you have a `zip` executable on the system, install using your OS package manager if necessarily.
-You can install NodeServer from the Polyglot store or manually running
+Install this fork in PG3 as a Local plugin: SSH to your eISY/Polisy and clone this repository, then add a Local plugin in PG3 pointing at the clone path:
 ```
-cd ~/.polyglot/nodeservers
-git clone https://github.com/exking/udi-hue-poly.git Hue
+ssh admin@your-eisy-ip
+git clone https://github.com/superflytnt/udi-hue-pg3
 ```
 
 ### Configuration
@@ -40,13 +38,15 @@ git clone https://github.com/exking/udi-hue-poly.git Hue
 Once installed - push the button on the Hue Bridge and add NodeServer into Polyglot, that will allow it to pair with the Bridge.
 If you have been using v1 of the Hue Poly - you will likely have a file named `bridges`, copy that file into `~/.python_hue` - you should be able to skip the pairing process and start this Poly out of the box.
 
+To monitor the plugin itself, add a custom parameter `heartbeat_url` with a heartbeat/cron-monitor URL. The plugin pings it on every poll regardless of bridge or device state, so your monitor alerts when the plugin freezes. Empty (default) disables the ping.
+
 Sometimes automatic bridge IP address discovery fails, in that case - you can specify Bridge IP address in a custom parameter `ip` for the NodeServer using Polyglot's frontend interface. Additionally - if `username` parameter is given - NodeServer will use it (in case you have a username established already and don't want another one created on the Bridge).
 
 ### Notes
 
 Poly assumes that Bridge IP address never change, so it is recommended that you create an IP address reservation for the Hue Bridge on your router.
 
-Please report any problems on the [UDI user forum](https://forum.universal-devices.com/topic/23149-polyglot-v2-hue-nodeserver/).
+Please report any problems on the [UDI user forum](https://forum.universal-devices.com/topic/47480-hue-111-status-fixes-stream-recovery-timeouts/).
 
 Thanks and good luck.
 
@@ -54,3 +54,4 @@ Thanks and good luck.
 1. [Phue](https://github.com/studioimaginaire/phue) Library with minor modifications is used as a backend.
 2. [Original Implementation](https://github.com/UniversalDevicesInc/Polyglot) of the Hue Poly by UniversalDevices team was a base.
 3. [LiFX Poly](https://github.com/Einstein42/udi-lifx-poly) was used as a template in order to re-write this Poly for [Polyglot v2](https://github.com/UniversalDevicesInc/polyglot-v2)
+
